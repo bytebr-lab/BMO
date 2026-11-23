@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+    function myProfile() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    function activeUser() {
+      return signedIn() && userDocExists() && myProfile().ativo == true;
+    }
+    function admin() {
+      return activeUser() && myProfile().perfil == 'administrador';
+    }
+    function teacherOrAdmin() {
+      return activeUser() && myProfile().perfil in ['professor', 'administrador'];
+    }
+
+    match /usuarios/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.perfil == 'pendente'
+        && request.resource.data.ativo == false;
+      allow read: if signedIn() && (request.auth.uid == uid || teacherOrAdmin());
+      allow update: if admin()
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.perfil == resource.data.perfil
+            && request.resource.data.ativo == resource.data.ativo
+            && request.resource.data.email == resource.data.email);
+      allow delete: if admin();
+    }
+
+    match /noticias/{id} {
+      allow read: if resource.data.publicada == true || activeUser();
+      allow create, update, delete: if admin();
+    }
+
+    match /eventos/{id} {
+      allow read: if resource.data.publico == true || activeUser();
+      allow create, update, delete: if admin();
+    }
+
+    match /repertorio/{id} {
+      allow read: if activeUser();
+      allow create, update, delete: if admin();
+    }
+
+    match /turmas/{id} {
+      allow read: if activeUser();
+      allow create, update, delete: if teacherOrAdmin();
+    }
+
+    match /frequencias/{id} {
+      allow read: if admin()
+        || (activeUser() && resource.data.alunoUid == request.auth.uid)
+        || (activeUser() && myProfile().perfil == 'professor');
+      allow create: if teacherOrAdmin()
+        && request.resource.data.registradoPor == request.auth.uid;
+      allow update, delete: if teacherOrAdmin();
+    }
+
+    // ===================== EXPANSÃO: FORMAÇÃO MUSICAL, CORPO MUSICAL, CAIXA DE MENSAGENS =====================
+
+    // Cursos: o público lê somente cursos ativos; escrita só do administrador.
+    match /cursos/{id} {
+      allow read: if resource.data.ativo == true || admin();
+      allow create, update, delete: if admin();
+    }
+
+    // Corpo musical: o público lê somente integrantes ativos; escrita só do administrador.
+    match /corpo_musical/{id} {
+      allow read: if resource.data.ativo == true || admin();
+      allow create, update, delete: if admin();
+    }
+
+    // Pré-inscrições: qualquer visitante pode CRIAR (com validação); nunca ler, alterar ou excluir.
+    function validPreInscricao() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['tipo', 'nome', 'dataNascimento', 'telefone', 'whatsapp', 'cursoId', 'cursoNome', 'mensagem', 'status', 'criadoEm'])
+        && d.keys().hasAll(['tipo', 'nome', 'dataNascimento', 'telefone', 'cursoId', 'cursoNome', 'status', 'criadoEm'])
+        && d.tipo == 'inscricao'
+        && d.nome is string && d.nome.size() >= 3 && d.nome.size() <= 100
+        && d.dataNascimento is string && d.dataNascimento.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.telefone is string && d.telefone.matches('^[0-9]{10,11}$')
+        && (!('whatsapp' in d) || (d.whatsapp is string && d.whatsapp.matches('^([0-9]{10,11})?$')))
+        && d.cursoId is string && d.cursoId.size() > 0 && d.cursoId.size() <= 60
+        && d.cursoNome is string && d.cursoNome.size() > 0 && d.cursoNome.size() <= 100
+        && (!('mensagem' in d) || (d.mensagem is string && d.mensagem.size() <= 800))
+        && d.status == 'pendente'
+        && d.criadoEm == request.time
+        && exists(/databases/$(database)/documents/cursos/$(d.cursoId))
+        && get(/databases/$(database)/documents/cursos/$(d.cursoId)).data.ativo == true
+        && get(/databases/$(database)/documents/cursos/$(d.cursoId)).data.inscricoesAbertas == true;
+    }
+
+    match /inscricoes/{id} {
+      allow create: if validPreInscricao();
+      allow read, delete: if admin();
+      // O administrador só pode alterar o status do atendimento.
+      allow update: if admin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['pendente', 'em_atendimento', 'concluida'];
+    }
+
+    // Mensagens do formulário de contato: criação pública validada; leitura/gestão só do administrador.
+    function validMensagemContato() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['tipo', 'nome', 'contato', 'assunto', 'mensagem', 'status', 'criadoEm'])
+        && d.keys().hasAll(['tipo', 'nome', 'contato', 'assunto', 'mensagem', 'status', 'criadoEm'])
+        && d.tipo == 'contato'
+        && d.nome is string && d.nome.size() >= 2 && d.nome.size() <= 100
+        && d.contato is string && d.contato.size() >= 5 && d.contato.size() <= 120
+        && d.assunto is string && d.assunto.size() >= 3 && d.assunto.size() <= 120
+        && d.mensagem is string && d.mensagem.size() >= 5 && d.mensagem.size() <= 1500
+        && d.status == 'pendente'
+        && d.criadoEm == request.time;
+    }
+
+    match /mensagens/{id} {
+      allow create: if validMensagemContato();
+      allow read, delete: if admin();
+      allow update: if admin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['pendente', 'em_atendimento', 'concluida'];
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

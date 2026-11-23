@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function activeUser() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
+    }
+    function admin() {
+      return activeUser()
+        && firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.perfil == 'administrador';
+    }
+
+    // PDFs de arranjos do repertório: leitura por usuários ativos; envio/remoção só do administrador.
+    match /repertorio/{arquivo} {
+      allow read: if activeUser();
+      allow create, update: if admin()
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+      allow delete: if admin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
