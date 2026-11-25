@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitar cadastro | Portal BMO</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-bg">
+  <main class="auth-card auth-wide">
+    <a class="back" href="index.html">← Voltar ao portal</a>
+    <img class="auth-crest" src="assets/brasao-bmo.jpg" alt="Brasão BMO">
+    <span class="kicker">NOVO ACESSO</span>
+    <h1>Solicitar cadastro</h1>
+    <p class="muted">Preencha os dados. A administração analisará e liberará seu acesso.</p>
+
+    <form id="request-form">
+      <label for="name">Nome completo</label>
+      <input id="name" required maxlength="100" placeholder="Seu nome completo">
+
+      <label for="req-email">E-mail</label>
+      <input id="req-email" type="email" required placeholder="seuemail@exemplo.com">
+
+      <label for="phone">Telefone / WhatsApp (opcional)</label>
+      <input id="phone" type="tel" placeholder="(91) 99999-9999">
+
+      <label for="profile">Perfil solicitado</label>
+      <select id="profile" required>
+        <option value="">Selecione</option>
+        <option value="aluno">Aluno</option>
+        <option value="musico">Músico</option>
+        <option value="professor">Professor</option>
+      </select>
+
+      <label for="instrument">Instrumento principal (opcional)</label>
+      <input id="instrument" maxlength="60" placeholder="Ex.: Trompete, Clarinete, Saxofone, Percussão...">
+
+      <label for="reason">Informações adicionais (opcional)</label>
+      <textarea id="reason" rows="3" maxlength="500" placeholder="Conte brevemente sua ligação com a banda"></textarea>
+
+      <label for="new-password">Crie uma senha (mínimo 6 caracteres)</label>
+      <input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
+
+      <button class="btn btn-block" type="submit">Enviar solicitação</button>
+      <p id="signup-form-message" class="form-message" role="status"></p>
+    </form>
+
+    <p class="auth-bottom">Já possui conta? <a href="login.html">Entrar</a>.</p>
+  </main>
+
+  <script type="module" src="js/signup.js"></script>
+</body>
+</html>
